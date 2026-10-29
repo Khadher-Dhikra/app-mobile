@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Collection: users
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      // Only user can create their profile on signup, cannot make themselves admin
+      allow create: if isOwner(userId) &&
+        (!('role' in request.resource.data) || request.resource.data.role == 'user');
+      // Only user can update their profile, cannot escalate to admin
+      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Collection: rides
+    match /rides/{rideId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        request.resource.data.driverId == request.auth.uid &&
+        request.resource.data.availableSeats > 0 &&
+        request.resource.data.availableSeats <= request.resource.data.totalSeats &&
+        request.resource.data.pricePerSeat > 0 &&
+        request.resource.data.departureCity != request.resource.data.arrivalCity;
+      // Driver can update or cancel, or system transaction updates seats
+      allow update: if isAuthenticated() && (
+        resource.data.driverId == request.auth.uid ||
+        // Allowed seat updates during booking transactions
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availableSeats']))
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Collection: bookings
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated() && (
+        resource.data.passengerId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        isAdmin()
+      );
+      // Passenger creates booking
+      allow create: if isAuthenticated() &&
+        request.resource.data.passengerId == request.auth.uid &&
+        request.resource.data.driverId != request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.seatsCount >= 1;
+      // Updates allowed only between driver and passenger according to transitions
+      allow update: if isAuthenticated() && (
+        resource.data.passengerId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Collection: trip_sessions (departure verification codes)
+    match /trip_sessions/{sessionId} {
+      allow read: if isAuthenticated() && (
+        resource.data.passengerId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        isAdmin()
+      );
+      // Created when booking is accepted
+      allow create: if isAuthenticated() && (
+        request.resource.data.driverId == request.auth.uid ||
+        isAdmin()
+      );
+      // Driver verifies code or records attempts
+      allow update: if isAuthenticated() && (
+        resource.data.driverId == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Collection: reports (signalements)
+    match /reports/{reportId} {
+      // Any authenticated user can file a report
+      allow create: if isAuthenticated() &&
+        request.resource.data.reporterId == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      // Only administrators can view and process reports
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Collection: reviews
+    match /reviews/{reviewId} {
+      allow read: if isAuthenticated();
+      // Only author can submit review, rating between 1 and 5
+      allow create: if isAuthenticated() &&
+        request.resource.data.authorId == request.auth.uid &&
+        request.resource.data.rating >= 1 &&
+        request.resource.data.rating <= 5;
+      allow update, delete: if isAdmin();
+    }
+  }
+}

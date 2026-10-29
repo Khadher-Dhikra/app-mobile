@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "608829457774",
+    "project_id": "tawsila-91768",
+    "storage_bucket": "tawsila-91768.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:608829457774:android:6213152fecc5ad172d6d7f",
+        "android_client_info": {
+          "package_name": "tn.tawsila.tawsila"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJ6cduFaUn_2bwHd4wI3HPTL8AGkDq9MY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
